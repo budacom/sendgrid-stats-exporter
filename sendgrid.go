@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
 const (
-	endpoint = "https://api.sendgrid.com/v3/stats"
+	endpoint            = "https://api.sendgrid.com/v3/stats"
+	endpoint_categories = "https://api.sendgrid.com/v3/categories/stats/sums"
 )
 
 type Metrics struct {
@@ -34,7 +36,8 @@ type Metrics struct {
 }
 
 type Stat struct {
-	Metrics *Metrics `json:"metrics,omitempty"`
+	Metrics  *Metrics `json:"metrics,omitempty"`
+	Category string   `json:"name,omitempty"`
 }
 
 type Statistics struct {
@@ -91,4 +94,64 @@ func collectByDate(timeStart time.Time, timeEnd time.Time) ([]*Statistics, error
 	default:
 		return nil, fmt.Errorf("status code = %d, response = %s", res.StatusCode, res.Body)
 	}
+}
+
+func collectByCategory(timeStart time.Time) (*Statistics, error) {
+	var limit int = 25
+	var offset int = 0
+	var stats *Statistics = &Statistics{}
+
+	for {
+		parsedURL, err := url.Parse(endpoint_categories)
+		if err != nil {
+			return nil, err
+		}
+		layout := "2006-01-02"
+		dateStart := timeStart.Format(layout)
+
+		query := url.Values{}
+		query.Set("start_date", dateStart)
+		query.Set("limit", strconv.Itoa(limit))
+		query.Set("offset", strconv.Itoa(offset))
+		if *accumulatedMetrics {
+			query.Set("aggregated_by", "month")
+		} else {
+			query.Set("aggregated_by", "day")
+		}
+
+		parsedURL.RawQuery = query.Encode()
+
+		req, err := http.NewRequest(http.MethodGet, parsedURL.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", *sendGridAPIKey))
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		var pageStats *Statistics
+		var reader io.Reader = res.Body
+		reader = io.TeeReader(reader, os.Stdout)
+		switch res.StatusCode {
+		case http.StatusTooManyRequests:
+			return nil, fmt.Errorf("API rate limit exceeded")
+		case http.StatusOK:
+			if err := json.NewDecoder(reader).Decode(&pageStats); err != nil {
+				return nil, err
+			}
+			stats.Stats = append(stats.Stats, pageStats.Stats...)
+		default:
+			return nil, fmt.Errorf("status code = %d, response = %s", res.StatusCode, res.Body)
+		}
+		if len(pageStats.Stats) < limit {
+			break
+		}
+		offset += limit
+	}
+	return stats, nil
 }

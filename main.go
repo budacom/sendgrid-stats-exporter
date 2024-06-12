@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
@@ -57,6 +57,10 @@ var (
 		"sendgrid.accumulated-metrics",
 		"[Optional] Accumulated SendGrid Metrics by month, to calculate monthly email limit.",
 	).Default("False").Envar("SENDGRID_ACCUMULATED_METRICS").Bool()
+	byCategoryMetrics = kingpin.Flag(
+		"sendgrid.by-category-metrics",
+		"[Optional] Collect SendGrid Metrics by category.",
+	).Default("False").Envar("SENDGRID_BY_CATEGORY_METRICS").Bool()
 )
 
 func main() {
