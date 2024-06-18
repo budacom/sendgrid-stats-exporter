@@ -139,13 +139,16 @@ func collector(logger log.Logger) *Collector {
 }
 
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
-	var today time.Time
+	var today time.Time = time.Now()
 
 	if *location != "" && *timeOffset != 0 {
 		loc := time.FixedZone(*location, *timeOffset)
 		today = time.Now().In(loc)
-	} else {
-		today = time.Now()
+	} else if *location != "" {
+		loc, err := time.LoadLocation(*location)
+		if err == nil {
+			today = time.Now().In(loc)
+		}
 	}
 
 	queryDate := today
